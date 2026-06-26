@@ -4,23 +4,31 @@ const app = express();
 // Middleware to parse JSON
 app.use(express.json());
 
-// In-memory store (for demo; use Vercel KV for persistence)
+// In-memory store (for demo; consider Vercel KV for persistence)
 const store = {};
 
-// --- API ROUTES (must come before static) ---
+// Admin secret – must match the one used by your bot
+const ADMIN_SECRET = process.env.ADMIN_SECRET || 'changeme';
 
-// Admin: Set/update a link
+// ---------- ADMIN ROUTE ----------
 app.post('/admin/set-link', (req, res) => {
-    const { userId, veriffUrl } = req.body;
+    const { userId, veriffUrl, token } = req.body;
+
+    // 🔒 Check token
+    if (token !== ADMIN_SECRET) {
+        return res.status(401).json({ error: 'Unauthorized: invalid token' });
+    }
+
     if (!userId || !veriffUrl) {
         return res.status(400).json({ error: 'userId and veriffUrl are required' });
     }
+
     store[userId] = veriffUrl;
     console.log(`✅ Link set for ${userId}: ${veriffUrl}`);
     res.json({ success: true, message: `Link assigned to ${userId}` });
 });
 
-// User: Get their link
+// ---------- USER ROUTE ----------
 app.get('/get-link/:userId', (req, res) => {
     const { userId } = req.params;
     const link = store[userId];
@@ -30,13 +38,13 @@ app.get('/get-link/:userId', (req, res) => {
     res.json({ veriffUrl: link });
 });
 
-// --- STATIC FILES (after API routes) ---
+// ---------- STATIC FILES ----------
 app.use(express.static('public'));
 
-// --- Fallback: Redirect root to client page ---
+// Fallback: redirect root to client page
 app.get('/', (req, res) => {
     res.redirect('/client.html');
 });
 
-// --- Export for Vercel ---
+// ---------- EXPORT FOR VERCEL ----------
 module.exports = app;

