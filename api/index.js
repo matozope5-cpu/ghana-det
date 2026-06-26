@@ -1,31 +1,42 @@
-// api/index.js
 const express = require('express');
-const { kv } = require('@vercel/kv'); // install with: npm i @vercel/kv
-
 const app = express();
+
+// Middleware to parse JSON
 app.use(express.json());
 
-// Admin endpoint – store link in KV
-app.post('/admin/set-link', async (req, res) => {
+// In-memory store (for demo; use Vercel KV for persistence)
+const store = {};
+
+// --- API ROUTES (must come before static) ---
+
+// Admin: Set/update a link
+app.post('/admin/set-link', (req, res) => {
     const { userId, veriffUrl } = req.body;
     if (!userId || !veriffUrl) {
         return res.status(400).json({ error: 'userId and veriffUrl are required' });
     }
-    await kv.set(`veriff:${userId}`, veriffUrl);
+    store[userId] = veriffUrl;
+    console.log(`✅ Link set for ${userId}: ${veriffUrl}`);
     res.json({ success: true, message: `Link assigned to ${userId}` });
 });
 
-// User endpoint – fetch link from KV
-app.get('/get-link/:userId', async (req, res) => {
+// User: Get their link
+app.get('/get-link/:userId', (req, res) => {
     const { userId } = req.params;
-    const link = await kv.get(`veriff:${userId}`);
+    const link = store[userId];
     if (!link) {
         return res.status(404).json({ error: 'No link found for this user' });
     }
     res.json({ veriffUrl: link });
 });
 
-// Serve static files from 'public'
+// --- STATIC FILES (after API routes) ---
 app.use(express.static('public'));
 
+// --- Fallback: Redirect root to client page ---
+app.get('/', (req, res) => {
+    res.redirect('/client.html');
+});
+
+// --- Export for Vercel ---
 module.exports = app;
