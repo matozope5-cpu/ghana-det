@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin – Set Veriff Links</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; }
+        h2 { color: #333; }
+        label { display: block; margin: 15px 0 5px; font-weight: bold; }
+        input[type="text"], input[type="url"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+        button:hover { background: #0056b3; }
+        #message { margin-top: 20px; padding: 10px; border-radius: 4px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        hr { margin: 30px 0; }
+        #currentLinks { background: #f8f9fa; padding: 15px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <h2>🔐 Admin – Assign Veriff Links</h2>
+    <form id="linkForm">
+        <label for="userId">User ID (unique identifier from your system)</label>
+        <input type="text" id="userId" placeholder="e.g., client-123" required>
+
+        <label for="veriffUrl">Veriff Session URL (paste from Veriff portal)</label>
+        <input type="url" id="veriffUrl" placeholder="https://veriff.me/..." required>
+
+        <button type="submit">Assign / Update Link</button>
+    </form>
+
+    <div id="message"></div>
+
+    <hr>
+    <h3>📋 Currently Assigned Links</h3>
+    <div id="currentLinks">Loading...</div>
+
+    <script>
+        // Fetch and display all current links (by reading from /get-link for each user? 
+        // We'll just list them from a simple fetch of all data – but our API doesn't have a "list all" endpoint.
+        // For demo, we'll use a simple trick: we can fetch each known user's link if we know them.
+        // Since we don't have a list endpoint, we'll just show a static note and allow updates.
+        // You can extend the backend to list all if needed.
+        document.getElementById('currentLinks').innerHTML = 
+            'Use the form above to set links. They are stored in <code>data.json</code>.';
+
+        document.getElementById('linkForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const userId = document.getElementById('userId').value.trim();
+            const veriffUrl = document.getElementById('veriffUrl').value.trim();
+
+            const messageEl = document.getElementById('message');
+            messageEl.textContent = 'Sending...';
+            messageEl.className = '';
+
+            try {
+                const response = await fetch('/admin/set-link', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId, veriffUrl })
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    messageEl.textContent = '✅ ' + data.message;
+                    messageEl.className = 'success';
+                } else {
+                    messageEl.textContent = '❌ Error: ' + data.error;
+                    messageEl.className = 'error';
+                }
+            } catch (err) {
+                messageEl.textContent = '❌ Network error: ' + err.message;
+                messageEl.className = 'error';
+            }
+
+            // Clear form fields (optional)
+            // document.getElementById('userId').value = '';
+            // document.getElementById('veriffUrl').value = '';
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Your Identity</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 500px; margin: 80px auto; padding: 20px; text-align: center; }
+        h1 { color: #333; }
+        button {
+            background: #28a745;
+            color: white;
+            padding: 15px 40px;
+            font-size: 20px;
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+            margin: 20px 0;
+            transition: background 0.2s;
+        }
+        button:hover { background: #218838; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        #status { margin-top: 20px; font-size: 16px; color: #555; }
+        .error { color: #dc3545; }
+        .info { color: #17a2b8; }
+    </style>
+</head>
+<body>
+    <h1>🔑 Identity Verification</h1>
+    <p>Click the button below to start your verification with Veriff.</p>
+    <button id="verifyBtn">Verify Now</button>
+    <div id="status">Ready</div>
+
+    <script>
+        // In a real app, this userId would come from your authentication system.
+        // For demo, we'll let the user type it, or you can hardcode for testing.
+        // Let's use a prompt for simplicity, but you can replace it with a hidden value.
+        const userId = prompt('Enter your User ID (e.g., client-123)') || 'demo-user';
+        document.querySelector('h1').insertAdjacentText('afterend', `<p><small>User ID: <strong>${userId}</strong></small></p>`);
+
+        const verifyBtn = document.getElementById('verifyBtn');
+        const statusEl = document.getElementById('status');
+
+        verifyBtn.addEventListener('click', async () => {
+            verifyBtn.disabled = true;
+            statusEl.textContent = 'Fetching your verification link...';
+            statusEl.className = 'info';
+
+            try {
+                const response = await fetch(`/get-link/${encodeURIComponent(userId)}`);
+                const data = await response.json();
+
+                if (response.ok && data.veriffUrl) {
+                    statusEl.textContent = 'Redirecting to Veriff...';
+                    // Redirect to the manual link
+                    window.location.href = data.veriffUrl;
+                } else {
+                    statusEl.textContent = '❌ No verification link assigned for this user. Please contact support.';
+                    statusEl.className = 'error';
+                    verifyBtn.disabled = false;
+                }
+            } catch (error) {
+                statusEl.textContent = '❌ Network error. Please try again later.';
+                statusEl.className = 'error';
+                verifyBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
